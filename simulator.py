@@ -1,6 +1,24 @@
 import numpy as np
-
 import numpy.random
+import time
+import os
+from shutil import get_terminal_size
+from matplotlib import lines, pyplot as p
+
+OUTPUTDIR = "output"
+
+def plot_scale_decision(plotradius):
+    "decide what size a plot should be given the radius of the occupied set"
+    smallradius = 10
+    largeradius = 1000
+    smallscale = 4
+    largescale = 24
+    if plotradius < smallradius:
+        return smallscale
+    if plotradius > largeradius:
+        return largescale
+    # interpolate in log
+    return int(smallscale * (plotradius / smallradius) ** (np.log(largescale / smallscale) / np.log(largeradius / smallradius)))
 
 """
     NOTE: our random walk has diagonal steps.
@@ -85,6 +103,10 @@ def stepgenerator():
         for i in range(COUNT):
             yield steps[i, :]
 
+def DIAGONAL_TO_SQUARE_LATTICE(x, y):
+    "Rotate pi/4 radians clockwise and scale by 1/sqrt(2)."
+    return (x+y) >> 1, (y-x) >> 1
+
 class dla_walk:
     def __init__(self, starting_occupied=None):
         self.regj = regulatedjump()
@@ -97,6 +119,8 @@ class dla_walk:
             starting_occupied = {(0, 0)}
         for site in starting_occupied:
             self.fillin(site[0], site[1])
+        self.saved_image_counter = 0
+        self.timestamp = time.strftime("%Y-%m-%d-%H:%M:%S")
     
     def reset(self):
         self.pos = large_random_pos()
@@ -136,30 +160,81 @@ class dla_walk:
             self.walk()
         return self.pos
 
-    def plot(self, nam, ff):
-        from matplotlib import pyplot as p
+    def currently_occupied_sites(self):
+        """Return the list of currently occupied sites.
+
+        The result is rotated into the square lattice
+        by the map x, y -> (x + y) >> 1, (x - y) >> 1."""
         occ = np.array(list(self.occ))
         x, y = occ[:, 0], occ[:, 1]
-        x, y = (x + y) >> 1, (x - y) >> 1
-        p.figure(figsize=(ff, ff))
-        p.scatter(x, y, s = 2)
-        import os
-        fn = "dla-%s.png" % nam
-        i = 0
-        while os.path.exists(fn):
-            i += 1
-            fn = "dla-%s-%d.png" % (nam, i)
-        print("saving to %s" % fn)
-        p.savefig(fn)
-        csv = open(fn + ".csv", "w")
+        return DIAGONAL_TO_SQUARE_LATTICE(x, y)
+
+    def _save_fig(self, filename, plotsize = 7, scatterdotsize = 2):
+        x, y = self.currently_occupied_sites()
+
+        fig, ax = p.subplots(figsize=(plotsize, plotsize))
+        r = self.radius / np.sqrt(2) * 1.1
+        ax.set_xlim(-r, r)
+        ax.set_ylim(-r, r)
+
+        p.scatter(x, y, scatterdotsize)
+
+        """
+        def addline(x1, y1, x2, y2):
+            fig.lines.extend([ lines.Line2D([x1, x2], [y1, y2], transform=ax.transData, figure=fig) ])
+
+        for x, y in self.occ:
+            X, Y = DIAGONAL_TO_SQUARE_LATTICE(x, y)
+            if (x+1, y+1) in self.occ:
+                addline(X, Y, X+1, Y)
+                print("line", X, Y, X+1, Y)
+                pass
+            if (x+1, y-1) in self.occ:
+                addline(X, Y, X, Y-1)
+                print("line", X, Y, X, Y-1)
+        """
+                
+        p.savefig(filename)
+
+    def _save_csv(self, filename):
+        x, y = self.currently_occupied_sites()
+
+        csv = open(filename, "w")
         for j in range(x.shape[0]):
             csv.write("%d %d\n" % (x[j], y[j]))
         csv.close()
 
+    def generate_next_filenames(self, filename_identifier=""):
+        if not os.path.isdir(OUTPUTDIR):
+            raise Exception("output directory doesn't exist, but we should have made it in make_output_directory")
+        self.saved_image_counter += 1
+        fn = "%s/dla%s-%s-%03d" % (OUTPUTDIR, filename_identifier, self.timestamp, self.saved_image_counter)
+        return {
+                "png": fn + ".png",
+                "csv": fn + ".csv"
+        }
+
+    def make_output_directory(self):
+        try:
+            os.mkdir(OUTPUTDIR)
+        except FileExistsError:
+            pass
+
+    #def plot(self, plotsize = 7, scatterdotsize = 2):
+    def plot(self, plotsize = None, scatterdotsize = 2, filename_identifier=""):
+        self.make_output_directory()
+
+        filenames = self.generate_next_filenames(filename_identifier)
+
+        if plotsize is None:
+            plotsize = plot_scale_decision(self.radius)
+
+        self._save_fig(filenames['png'], plotsize, scatterdotsize)
+        self._save_csv(filenames['csv'])
+
     def ascii(self, insert):
         CHARS = " ▄▀█"
-        import shutil
-        size = shutil.get_terminal_size()
+        size = get_terminal_size()
         COLS = size[0] - 1
         ROWS = 2*size[1]
         occ = np.zeros((COLS, ROWS))
@@ -185,21 +260,26 @@ class dla_walk:
         none = ""
         print("\n" + "\n".join(put), end=none)
 
-if __name__ == "__main__":
-    import time
+    def sitecount(self):
+        return len(self.occ)
+
+def walk(steps_per_ascii, steps_per_image):
     dwal = dla_walk()
     t = time.time()
     try:
         i = 0
+        until_image = steps_per_image
         while True:
-            for j in range(100000):
+            for j in range(steps_per_ascii):
                 dwal.step()
-            rat = (time.time() - t) / max(1, len(dwal.occ))
-            dwal.ascii("%9d    %9d particles    %.2f sec/particle" % (i, max(0, len(dwal.occ)), rat))
-            if i % 100 == 0 and i > 0:
-                dwal.plot("%06d" % i, 7)
-            i += 1
+            second_per_particle = (time.time() - t) / max(1, dwal.sitecount())
+            dwal.ascii("%9d    %9d particles    %.2f sec/particle" % (i, max(0, dwal.sitecount()), second_per_particle))
+            until_image -= steps_per_ascii
+            if until_image <= 0:
+                dwal.plot(None, 4)
+                until_image += steps_per_image
     finally:
-        dwal.plot("final", 7)
-    print()
-    print("%d occupied sites" % len(dwal.occ))
+        dwal.plot(None, 4, "-final")
+
+if __name__ == "__main__":
+    walk(100000, 100000000)
