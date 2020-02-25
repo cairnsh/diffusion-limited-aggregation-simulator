@@ -79,7 +79,7 @@ class regulatedjump:
     def __init__(self, p=1e-6):
         self.p = p
         self.seq = _slow()
-        self.seq = _drop_first_and_rescale(self.seq, 16)
+        self.seq = _drop_first_and_rescale(self.seq, 128)
     
     def get_allowed_p(self):
         return self.p * next(self.seq)
