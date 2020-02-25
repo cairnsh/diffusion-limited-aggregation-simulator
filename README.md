@@ -1,7 +1,7 @@
 A faster DLA simulator that can deposit 1-3 particles per second and does not get stuck walking around indefinitely.
-Walks are accelerated by taking many steps at once, using Chernoff bounds to make it very unlikely that any collisions are missed.
+Walks are accelerated by taking many steps at once, using Chernoff bounds to make it very unlikely that any collisions are missed. (The total probability of a mistake in any individual run is at most .000001.)
 
-It creates particles by rounding a Gaussian and keeping only points with radius > 10000, and it kills particles at radius > 40000. Aside from those approximations it should be about an exact walk on the lattice, up to the accuracy of numpy's `numpy.random.binomial`.
+It creates particles by rounding a Gaussian and keeping only points with radius > 10000, and it kills particles at radius > 40000. Aside from those approximations it should be roughly an exact simulation on the lattice with probability 1 - 1e-6, up to the accuracy of numpy's `numpy.random.binomial`.
 
 Usage:
 ```
