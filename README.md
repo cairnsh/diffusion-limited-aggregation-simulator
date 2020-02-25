@@ -55,4 +55,8 @@ Some screenshots. The simulator displays some Unicode graphics and statistics wh
 
 It also outputs plots every few steps. (By default, every 10,000,000 steps.)
 
+The names of the images are `output/dla-(timestamp at start of run)-(number of image).png`. It writes out a CSV file containing the occupied sites together with each plot.
+
+The program will make one final plot if you interrupt it from the keyboard, which will be called `dla-final-(timestamp)-(number).png`.
+
 The plots become larger as the occupied set grows.![An image output by the DLA simulator.](https://github.com/cairnsh/diffusion-limited-aggregation-simulator/blob/master/example-plot.png)
