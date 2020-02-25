@@ -49,6 +49,13 @@ def _slow():
             l <<= 1
             ll += 1
 
+def _drop_first_and_rescale(iterator, drop):
+    scale = 1
+    for i in range(drop):
+        scale -= next(iterator)
+    while True:
+        yield next(iterator) / scale
+
 def centred_binomial_rv(m, size):
     return 2 * np.random.binomial(m, 0.5, size) - m
 
@@ -72,26 +79,29 @@ class regulatedjump:
     def __init__(self, p=1e-6):
         self.p = p
         self.seq = _slow()
+        self.seq = _drop_first_and_rescale(self.seq, 100)
     
     def get_allowed_p(self):
         return self.p * next(self.seq)
     
     @staticmethod
-    def get_allowed_length(p, radius):
+    def get_scale(p):
         # p <= 16 * exp(-(R/sqrt(2))^2 / 2T)
         # T = radius**2 / 4 / ln(8/p)
         # extra factor of sqrt(2)
-        return radius**2 / 4 / np.log(16 / p)
+        return 0.25 / np.log(16 / p)
     
     def jump(self, distance):
-        length = regulatedjump.get_allowed_length(
-            self.get_allowed_p(),
-            distance
-        )
+        p = self.get_allowed_p()
+        length = distance**2 * regulatedjump.get_scale(p)
+        length = int(np.floor(length))
+        if length < 1:
+            length = 1
         try:
-            return centred_binomial_rv(int(length - 0.5), 2)
+            return centred_binomial_rv(length, 2)
         except OverflowError:
-            print(distance, length)
+            print("Overflow error: couldn't do a binomial of length", length)
+            print("We were trying to jump inside distance", distance)
             raise
         
 def large_random_pos():
@@ -338,7 +348,7 @@ if __name__ == "__main__":
     if arg['fps'] <= 0:
         raise Exception("fps should be > 0, but it is %f" % arg['fps'])
 
-    print(arg)
+    #print(arg)
 
     fn = arg["continue"] or arg["plot"]
 
