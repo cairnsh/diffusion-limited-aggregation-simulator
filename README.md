@@ -25,10 +25,13 @@ optional arguments:
 
 Typical usage:
 ```
+python simulator.py --start
 python simulator.py --start --fps=20
+python simulator.py --start --fps=29.97
 python simulator.py --start --quiet &
 python simulator.py --continue output/dla-final-2020-02-25-14:47:02-001.csv --output_after_every 1000000
 python simulator.py --plot output/dla-final-2020-02-25-14:47:02-001.csv --plot-size 20
+```
 
 Some screenshots. The simulator displays some Unicode graphics and statistics when it's running:
 ```
