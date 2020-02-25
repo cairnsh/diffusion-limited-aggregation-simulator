@@ -347,6 +347,6 @@ if __name__ == "__main__":
         fps = arg['fps'],
         quiet = arg['quiet'],
         output_after_every = arg['output_after_every'],
-        plot_size = arg.get("plot-size", None),
+        plot_size = arg["plot_size"],
         justplot = arg["plot"] is not None
     )
