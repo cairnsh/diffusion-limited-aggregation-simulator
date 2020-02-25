@@ -53,6 +53,6 @@ Some screenshots. The simulator displays some Unicode graphics and statistics wh
        70          238 particles    0.15 sec/particle
 ```
 
-It also outputs plots every few steps. (By default, every 1,000,000 steps.)
+It also outputs plots every few steps. (By default, every 10,000,000 steps.)
 
 The plots become larger as the occupied set grows.![An image output by the DLA simulator.](https://github.com/cairnsh/diffusion-limited-aggregation-simulator/blob/master/example-plot.png)
