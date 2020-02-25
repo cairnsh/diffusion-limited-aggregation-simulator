@@ -16,6 +16,8 @@ PARTICLES_RESET_OUTSIDE = 4e4
 
 LONG_JUMP_MIN_DISTANCE = 20
 
+ALLOWED_PROBABILITY_OF_ERROR = 1e-6
+
 def plot_scale_decision(plotradius):
     "decide what size a plot should be given the radius of the occupied set"
     smallradius = 10
@@ -78,7 +80,7 @@ class regulatedjump:
     of numbers that add to 1.
     """
     
-    def __init__(self, p=1e-6):
+    def __init__(self, p=ALLOWED_PROBABILITY_OF_ERROR):
         self.p = p
         self.seq = _slow()
         self.seq = _drop_first_and_rescale(self.seq, 128)
