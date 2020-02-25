@@ -14,6 +14,8 @@ PARTICLES_START_OUTSIDE = 1e4
 
 PARTICLES_RESET_OUTSIDE = 4e4
 
+LONG_JUMP_MIN_DISTANCE = 20
+
 def plot_scale_decision(plotradius):
     "decide what size a plot should be given the radius of the occupied set"
     smallradius = 10
@@ -93,7 +95,8 @@ class regulatedjump:
     
     def jump(self, distance):
         p = self.get_allowed_p()
-        length = distance**2 * regulatedjump.get_scale(p)
+        self.scale = regulatedjump.get_scale(p)
+        length = distance**2 * self.scale
         length = int(np.floor(length))
         if length < 1:
             length = 1
@@ -187,7 +190,7 @@ class dla_walk:
             self.log("reset from %d %d" % (x, y))
             self.pos = large_random_pos()
             pass
-        elif r > self.radius + 20: # long jump
+        elif r > self.radius + LONG_JUMP_MIN_DISTANCE: # long jump
             self.log("long jump %d %d" % (x, y))
             self.pos += self.regj.jump(int(r - self.radius - 0.5))
             pass
@@ -301,7 +304,8 @@ class dla_walk:
     def sitecount(self):
         return len(self.occ)
 
-FORMATSTRING = "%9d    %9d particles    %.2f sec/particle%s"
+#FORMATSTRING = "%9d    %9d particles    %.2f sec/particle%s"
+FORMATSTRING = "%9d    %9d particles    %.2f sec/particle    %7d steps/particle    scale: %.0e%s"
 
 def walk(csv, fps, quiet, output_after_every, plot_size, justplot):
     dwal = dla_walk(occupied_set_csv = csv)
@@ -321,7 +325,11 @@ def walk(csv, fps, quiet, output_after_every, plot_size, justplot):
 
                 i += 1
                 if not quiet:
-                    extra = FORMATSTRING % (i, dwal.sitecount(), (time.time() - t) / max(1, (dwal.sitecount() - starting)), fn)
+                    sitecount = dwal.sitecount() - starting or 1
+                    elapsed = time.time() - t
+                    scale = np.sqrt(dwal.regj.scale)
+                    extra = FORMATSTRING % (i, sitecount, elapsed / sitecount, steps / sitecount, scale, fn)
+                    #extra = FORMATSTRING % (i, dwal.sitecount(), (time.time() - t) / max(1, (dwal.sitecount() - starting)), fn)
                     dwal.ascii(extra)
 
                 if imageat <= steps:
@@ -360,3 +368,5 @@ if __name__ == "__main__":
         plot_size = arg["plot_size"],
         justplot = arg["plot"] is not None
     )
+
+    # yay
