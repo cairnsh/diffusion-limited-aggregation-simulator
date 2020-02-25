@@ -10,7 +10,9 @@ from matplotlib import lines, pyplot as p
 
 OUTPUTDIR = "output"
 
-PARTICLES_START_OUTSIDE = 1e5
+PARTICLES_START_OUTSIDE = 1e4
+
+PARTICLES_RESET_OUTSIDE = 4e4
 
 def plot_scale_decision(plotradius):
     "decide what size a plot should be given the radius of the occupied set"
@@ -171,7 +173,7 @@ class dla_walk:
     def step(self):
         x, y = self.pos
         r = np.sqrt(x**2 + y**2)
-        if r > PARTICLES_START_OUTSIDE: # just reset
+        if r > PARTICLES_RESET_OUTSIDE: # just reset
             self.log("reset from %d %d" % (x, y))
             self.pos = large_random_pos()
             pass
@@ -291,31 +293,32 @@ class dla_walk:
 
 FORMATSTRING = "%9d    %9d particles    %.2f sec/particle%s"
 
-def walk(csv, fps, quiet, output_after_every):
+def walk(csv, fps, quiet, output_after_every, plot_size, justplot):
     dwal = dla_walk(occupied_set_csv = csv)
-    starting = dwal.sitecount()
-    t = time.time()
     try:
-        i = 0
-        steps = 0
-        imageat = steps + output_after_every
-        fn = ""
-        while True:
-            timer = time.time() + 1.0/fps
-            while time.time() < timer:
-                steps += 1
-                dwal.step()
+        if not justplot:
+            starting = dwal.sitecount()
+            t = time.time()
+            i = 0
+            steps = 0
+            imageat = steps + output_after_every
+            fn = ""
+            while True:
+                timer = time.time() + 1.0/fps
+                while time.time() < timer:
+                    steps += 1
+                    dwal.step()
 
-            i += 1
-            if not quiet:
-                extra = FORMATSTRING % (i, dwal.sitecount(), (time.time() - t) / max(1, (dwal.sitecount() - starting)), fn)
-                dwal.ascii(extra)
+                i += 1
+                if not quiet:
+                    extra = FORMATSTRING % (i, dwal.sitecount(), (time.time() - t) / max(1, (dwal.sitecount() - starting)), fn)
+                    dwal.ascii(extra)
 
-            if imageat <= steps:
-                imageat += output_after_every
-                fn = " " * 4 + dwal.plot(None, 2)
+                if imageat <= steps:
+                    imageat += output_after_every
+                    fn = " " * 4 + dwal.plot(plot_size, 2)
     finally:
-        dwal.plot(66, 2, "-final")
+        dwal.plot(plot_size, 2, "-final")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Simulate DLA in an accelerated and slightly approximate way')
@@ -323,19 +326,27 @@ if __name__ == "__main__":
     mode = parser.add_mutually_exclusive_group(required=1)
     mode.add_argument('--start', action='store_true', help="Start the simulation")
     mode.add_argument('--continue', type=str, help="Continue the simulation from a CSV list of sites")
+    mode.add_argument('--plot', type=str, help="Just plot a list of sites")
     parser.add_argument('--fps', type=float, default=2, help="Frames per second for the lifelike ASCII graphics")
     parser.add_argument('--quiet', action='store_true', help="Turn off the lifelike ASCII graphics")
     parser.add_argument('--output_after_every', type=int, default=int(1e7), 
             help="The number of simulation steps between plots.")
+    parser.add_argument('--plot-size', type=int, help="The size of the plots in matplotlib inches, which are 100 pixels.")
 
     arg = vars( parser.parse_args(sys.argv[1:]) )
 
     if arg['fps'] <= 0:
         raise Exception("fps should be > 0, but it is %f" % arg['fps'])
 
+    print(arg)
+
+    fn = arg["continue"] or arg["plot"]
+
     walk(
-        csv = arg.get("continue", None),
+        csv = fn,
         fps = arg['fps'],
         quiet = arg['quiet'],
-        output_after_every = arg['output_after_every']
+        output_after_every = arg['output_after_every'],
+        plot_size = arg.get("plot-size", None),
+        justplot = arg["plot"] is not None
     )
