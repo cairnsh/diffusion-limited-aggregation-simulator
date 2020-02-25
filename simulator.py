@@ -2,10 +2,15 @@ import numpy as np
 import numpy.random
 import time
 import os
+import sys
+import argparse
+import re
 from shutil import get_terminal_size
 from matplotlib import lines, pyplot as p
 
 OUTPUTDIR = "output"
+
+PARTICLES_START_OUTSIDE = 1e5
 
 def plot_scale_decision(plotradius):
     "decide what size a plot should be given the radius of the occupied set"
@@ -89,8 +94,8 @@ class regulatedjump:
         
 def large_random_pos():
     while True:
-        x, y = np.random.normal(0, 10000, 2)
-        if max(x, y, -x, -y) > 10000:
+        x, y = np.random.normal(0, PARTICLES_START_OUTSIDE, 2)
+        if np.sqrt(x**2 + y**2) > PARTICLES_START_OUTSIDE:
             x, y = int(x), int(y)
             if (x + y) & 1 == 0:
                 return np.array([x, y], dtype=np.int64)
@@ -107,23 +112,42 @@ def DIAGONAL_TO_SQUARE_LATTICE(x, y):
     "Rotate pi/4 radians clockwise and scale by 1/sqrt(2)."
     return (x+y) >> 1, (y-x) >> 1
 
+def SQUARE_TO_DIAGONAL_LATTICE(x, y):
+    "The opposite of DIAGONAL_TO_SQUARE_LATTICE."
+    return x-y, y+x
+
+DELIMITER = re.compile(r"[ ,]")
+
+def read_from_csv(f):
+    o = open(f)
+    data = []
+    for line in o:
+        data += [map(int, DELIMITER.split(line.strip()))]
+    return data
+
 class dla_walk:
-    def __init__(self, starting_occupied=None):
+    def __init__(self, occupied_set_csv=None):
         self.regj = regulatedjump()
         self.stepgenerator = stepgenerator()
         self.radius = 1
         self.reset()
         self.stopat = set()
         self.occ = set()
-        if starting_occupied is None:
-            starting_occupied = {(0, 0)}
-        for site in starting_occupied:
-            self.fillin(site[0], site[1])
+        if occupied_set_csv:
+            for site in read_from_csv(occupied_set_csv):
+                x, y = SQUARE_TO_DIAGONAL_LATTICE(*site)
+                self.fillin(x, y)
+        else:
+            self.default_starting_configuration()
         self.saved_image_counter = 0
         self.timestamp = time.strftime("%Y-%m-%d-%H:%M:%S")
     
     def reset(self):
         self.pos = large_random_pos()
+
+    def default_starting_configuration(self):
+        # just one occupied site at the origin
+        self.fillin(0, 0)
     
     def fillin(self, x, y):
         self.stopat.update({(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)})
@@ -147,7 +171,7 @@ class dla_walk:
     def step(self):
         x, y = self.pos
         r = np.sqrt(x**2 + y**2)
-        if r > 1e5: # just reset
+        if r > PARTICLES_START_OUTSIDE: # just reset
             self.log("reset from %d %d" % (x, y))
             self.pos = large_random_pos()
             pass
@@ -195,13 +219,14 @@ class dla_walk:
         """
                 
         p.savefig(filename)
+        p.close(fig)
 
     def _save_csv(self, filename):
         x, y = self.currently_occupied_sites()
 
         csv = open(filename, "w")
         for j in range(x.shape[0]):
-            csv.write("%d %d\n" % (x[j], y[j]))
+            csv.write("%d,%d\n" % (x[j], y[j]))
         csv.close()
 
     def generate_next_filenames(self, filename_identifier=""):
@@ -231,6 +256,7 @@ class dla_walk:
 
         self._save_fig(filenames['png'], plotsize, scatterdotsize)
         self._save_csv(filenames['csv'])
+        return filenames['png']
 
     def ascii(self, insert):
         CHARS = " ▄▀█"
@@ -263,23 +289,53 @@ class dla_walk:
     def sitecount(self):
         return len(self.occ)
 
-def walk(steps_per_ascii, steps_per_image):
-    dwal = dla_walk()
+FORMATSTRING = "%9d    %9d particles    %.2f sec/particle%s"
+
+def walk(csv, fps, quiet, output_after_every):
+    dwal = dla_walk(occupied_set_csv = csv)
+    starting = dwal.sitecount()
     t = time.time()
     try:
         i = 0
-        until_image = steps_per_image
+        steps = 0
+        imageat = steps + output_after_every
+        fn = ""
         while True:
-            for j in range(steps_per_ascii):
+            timer = time.time() + 1.0/fps
+            while time.time() < timer:
+                steps += 1
                 dwal.step()
-            second_per_particle = (time.time() - t) / max(1, dwal.sitecount())
-            dwal.ascii("%9d    %9d particles    %.2f sec/particle" % (i, max(0, dwal.sitecount()), second_per_particle))
-            until_image -= steps_per_ascii
-            if until_image <= 0:
-                dwal.plot(None, 4)
-                until_image += steps_per_image
+
+            i += 1
+            if not quiet:
+                extra = FORMATSTRING % (i, dwal.sitecount(), (time.time() - t) / max(1, (dwal.sitecount() - starting)), fn)
+                dwal.ascii(extra)
+
+            if imageat <= steps:
+                imageat += output_after_every
+                fn = " " * 4 + dwal.plot(None, 2)
     finally:
-        dwal.plot(None, 4, "-final")
+        dwal.plot(66, 2, "-final")
 
 if __name__ == "__main__":
-    walk(100000, 100000000)
+    parser = argparse.ArgumentParser(description='Simulate DLA in an accelerated and slightly approximate way')
+
+    mode = parser.add_mutually_exclusive_group(required=1)
+    mode.add_argument('--start', action='store_true', help="Start the simulation")
+    mode.add_argument('--continue', type=str, help="Continue the simulation from a CSV list of sites")
+    parser.add_argument('--fps', type=float, default=2, help="Frames per second for the lifelike ASCII graphics")
+    parser.add_argument('--quiet', action='store_true', help="Turn off the lifelike ASCII graphics")
+    parser.add_argument('--output_after_every', type=int, default=int(1e7), 
+            help="The number of simulation steps between plots.")
+
+    arg = vars( parser.parse_args(sys.argv[1:]) )
+
+    if arg['fps'] <= 0:
+        raise Exception("fps should be > 0, but it is %f" % arg['fps'])
+
+    walk(
+        csv = arg.get("continue", None),
+        fps = arg['fps'],
+        quiet = arg['quiet'],
+        output_after_every = arg['output_after_every']
+    )
