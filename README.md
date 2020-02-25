@@ -1,7 +1,7 @@
 A faster DLA simulator that can deposit 1-3 particles per second and does not get stuck walking around indefinitely.
 Walks are accelerated by taking many steps at once, using Chernoff bounds to make it very unlikely that any collisions are missed.
 
-It makes some approximations but it's pretty close to an exact walk on the lattice.
+It creates particles by rounding a Gaussian and keeping only points with radius > 10000, and it kills particles at radius > 40000. Aside from those approximations it should be about an exact walk on the lattice, up to the accuracy of numpy's `numpy.random.binomial`.
 
 Usage:
 ```
@@ -23,7 +23,15 @@ optional arguments:
                         The size of the plots in matplotlib inches, which are 100 pixels.
 ```
 
-Typical usage: `python simulator.py --start`
+Typical usage:
+```
+python simulator.py --start
+python simulator.py --start --fps=6
+python simulator.py --start --fps=29.97
+python simulator.py --start --quiet &
+python simulator.py --continue output/dla-final-2020-02-25-14:47:02-001.csv --output_after_every 1000000
+python simulator.py --plot output/dla-final-2020-02-25-14:47:02-001.csv --plot-size 20
+```
 
 Some screenshots. The simulator displays some Unicode graphics and statistics when it's running:
 ```
