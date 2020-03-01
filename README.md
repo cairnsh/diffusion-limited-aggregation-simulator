@@ -3,6 +3,8 @@ Walks are accelerated by taking many steps at once, using Chernoff bounds to mak
 
 It creates particles by rounding a Gaussian and keeping only points with radius > 10000, and it kills particles at radius > 40000. Aside from those approximations it should be roughly an exact simulation on the lattice with probability 1 - 1e-6, up to the accuracy of numpy's `numpy.random.binomial`.
 
+It uses ideas from "Internal DLA: Efficient Simulation of a Physical Growth Model" (https://people.mpi-inf.mpg.de/~kbringma/paper/2014ICALP.pdf).
+
 Usage:
 ```
 usage: simulator.py [-h] (--start | --continue CONTINUE | --plot PLOT) [--fps FPS] [--quiet] [--output_after_every OUTPUT_AFTER_EVERY]
