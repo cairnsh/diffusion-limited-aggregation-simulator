@@ -70,3 +70,5 @@ The names of the images are `output/dla-(timestamp at start of run)-(number of i
 The program will make one final plot if you interrupt it from the keyboard, which will be called `dla-final-(timestamp)-(number).png`.
 
 The plots become larger as the occupied set grows.![An image output by the DLA simulator.](https://github.com/cairnsh/diffusion-limited-aggregation-simulator/blob/master/example-plot.png)
+
+Note: Y. L. Loh apparently wrote a much faster simulator for "Bias-free simulation of diffusion-limited aggregation on a square lattice." (https://arxiv.org/pdf/1407.2586.pdf)
