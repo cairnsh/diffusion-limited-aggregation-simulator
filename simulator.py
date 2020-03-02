@@ -8,6 +8,10 @@ import re
 from shutil import get_terminal_size
 from matplotlib import lines, pyplot as p
 
+import util_sequence
+
+import walk
+
 OUTPUTDIR = "output"
 
 PARTICLES_START_OUTSIDE = 1e4
@@ -41,25 +45,6 @@ def plot_scale_decision(plotradius):
     with the map (x, y) -> ((x+y)/2, (x-y)/2).
 """
 
-invzeta = 6 / np.pi**2
-
-def _slow():
-    "a sequence that sums to 1, but decreases slowly"
-    i, l, ll = 1, 2, 1
-    while True:
-        yield 2 * invzeta / l / ll**2
-        i += 1
-        if i == l:
-            l <<= 1
-            ll += 1
-
-def _drop_first_and_rescale(iterator, drop):
-    scale = 1
-    for i in range(drop):
-        scale -= next(iterator)
-    while True:
-        yield next(iterator) / scale
-
 def centred_binomial_rv(m, size):
     return 2 * np.random.binomial(m, 0.5, size) - m
 
@@ -82,8 +67,7 @@ class regulatedjump:
     
     def __init__(self, p=ALLOWED_PROBABILITY_OF_ERROR):
         self.p = p
-        self.seq = _slow()
-        self.seq = _drop_first_and_rescale(self.seq, 128)
+        self.seq = util_sequence.slowly_increasing_sequence()
     
     def get_allowed_p(self):
         return self.p * next(self.seq)
