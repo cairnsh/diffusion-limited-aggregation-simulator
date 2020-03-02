@@ -21,7 +21,7 @@ class TestCentredBinomialRv(unittest.TestCase):
         def f():
             shape = (2, int(np.floor(length)))
             wa = 2*np.random.randint(0, 2, shape) - 1
-            wa = np.cumsum(wa, axis=1) # atashi iya ne
+            wa = np.cumsum(wa, axis=1) # :(
             te = np.linalg.norm(wa, axis=0)
             return np.max(te) <= DISTANCE
         count = 0
