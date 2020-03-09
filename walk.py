@@ -34,8 +34,8 @@ same bound for the probability of leaving the circle.
 So, we want to have T <= 0.5 * radius**2 / np.log(16/p).
 """
 
-def diagonal_walk_safe_length(radius, p):
-    return 0.5 * radius**2 / np.log(16 / p)
+def simple_walk_safe_scale(p):
+    return 0.5 / np.log(16 / p)
 
 def DIAGONAL_TO_SQUARE_LATTICE(x, y):
     "Rotate pi/4 radians clockwise and scale by 1/sqrt(2)."
@@ -55,7 +55,8 @@ class jump_regulator:
         self.probabilities = util_sequence.slowly_increasing_sequence(add_up_to = p)
 
     def get_allowed_length(self, radius):
-        length = diagonal_walk_safe_length(radius, next(self.probabilities))
+        self.scale = simple_walk_safe_scale(next(self.probabilities))
+        length = radius**2 * self.scale
         if length < 1:
             return 1
         else:
@@ -69,6 +70,9 @@ class jump_regulator:
             print("Overflow error: couldn't do a binomial of length", length)
             print("We were trying to jump inside distance", distance)
             raise
+
+    def scale(self):
+        return getattr(self, "scale", None)
 
 def large_random_position():
     while True:
@@ -116,3 +120,6 @@ class walk_handler:
         else:
             self.step_slowly()
         return self.pos
+
+    def scale(self):
+        return self.jump.scale

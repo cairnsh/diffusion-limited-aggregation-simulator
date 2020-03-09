@@ -14,13 +14,7 @@ import walk
 
 OUTPUTDIR = "output"
 
-PARTICLES_START_OUTSIDE = 1e4
-
-PARTICLES_RESET_OUTSIDE = 4e4
-
-LONG_JUMP_MIN_DISTANCE = 20
-
-ALLOWED_PROBABILITY_OF_ERROR = 1e-6
+DEFAULT_CONFIG = {(0, 0)}
 
 def plot_scale_decision(plotradius):
     "decide what size a plot should be given the radius of the occupied set"
@@ -35,88 +29,6 @@ def plot_scale_decision(plotradius):
     # interpolate in log
     return int(smallscale * (plotradius / smallradius) ** (np.log(largescale / smallscale) / np.log(largeradius / smallradius)))
 
-"""
-    NOTE: our random walk has diagonal steps.
-    We always start at a position (x, y) with x + y even.
-    This makes the jump probability a bit easier to think about,
-    because the two coordinates are independent.
-
-    When we draw the random walk in .plot() or .ascii(), we correct for this
-    with the map (x, y) -> ((x+y)/2, (x-y)/2).
-"""
-
-def centred_binomial_rv(m, size):
-    return 2 * np.random.binomial(m, 0.5, size) - m
-
-class regulatedjump:
-    """
-    We can walk for time pretty close to R^2 and still probably not leave
-    the circle of radius R.  More precisely, the probability that a simple
-    random walk of length T will go outside R is bounded above by
-        8 * exp(-R^2/2T).
-
-    The probability that our diagonal random walk will leave the
-    square [-R, R]^2 is <= 16 * exp(-R^2 / 2T), so the probability
-    that it will leave the circle of radius R is <=
-        16 * exp(-R^2 / 4T).
-    
-    We choose the jump lengths so that the total probability we
-    ever miss a departure is less than p, using the above sequence
-    of numbers that add to 1.
-    """
-    
-    def __init__(self, p=ALLOWED_PROBABILITY_OF_ERROR):
-        self.p = p
-        self.seq = util_sequence.slowly_increasing_sequence()
-    
-    def get_allowed_p(self):
-        return self.p * next(self.seq)
-    
-    @staticmethod
-    def get_scale(p):
-        # p <= 16 * exp(-(R/sqrt(2))^2 / 2T)
-        # T = radius**2 / 4 / ln(8/p)
-        # extra factor of sqrt(2)
-        return 0.25 / np.log(16 / p)
-    
-    def jump(self, distance):
-        p = self.get_allowed_p()
-        self.scale = regulatedjump.get_scale(p)
-        length = distance**2 * self.scale
-        length = int(np.floor(length))
-        if length < 1:
-            length = 1
-        try:
-            return centred_binomial_rv(length, 2)
-        except OverflowError:
-            print("Overflow error: couldn't do a binomial of length", length)
-            print("We were trying to jump inside distance", distance)
-            raise
-        
-def large_random_pos():
-    while True:
-        x, y = np.random.normal(0, PARTICLES_START_OUTSIDE, 2)
-        if np.sqrt(x**2 + y**2) > PARTICLES_START_OUTSIDE:
-            x, y = int(x), int(y)
-            if (x + y) & 1 == 0:
-                return np.array([x, y], dtype=np.int64)
-
-def stepgenerator():
-    COUNT = 100
-    pass
-    while True:
-        steps = 2 * np.random.randint(0, 2, (COUNT, 2)) - 1
-        for i in range(COUNT):
-            yield steps[i, :]
-
-def DIAGONAL_TO_SQUARE_LATTICE(x, y):
-    "Rotate pi/4 radians clockwise and scale by 1/sqrt(2)."
-    return (x+y) >> 1, (y-x) >> 1
-
-def SQUARE_TO_DIAGONAL_LATTICE(x, y):
-    "The opposite of DIAGONAL_TO_SQUARE_LATTICE."
-    return x-y, y+x
-
 DELIMITER = re.compile(r"[ ,]")
 
 def read_from_csv(f):
@@ -128,97 +40,57 @@ def read_from_csv(f):
 
 class dla_walk:
     def __init__(self, occupied_set_csv=None):
-        self.regj = regulatedjump()
-        self.stepgenerator = stepgenerator()
+        self.pos = walk.walk_handler()
         self.radius = 1
-        self.reset()
-        self.stopat = set()
-        self.occ = set()
+        self.stop_at = set()
+        self.occupy = set()
+
+        self.pos.reset()
+
         if occupied_set_csv:
-            for site in read_from_csv(occupied_set_csv):
-                x, y = SQUARE_TO_DIAGONAL_LATTICE(*site)
-                self.fillin(x, y)
+            self._initialize_from_csv(occupied_set_csv)
         else:
-            self.default_starting_configuration()
+            self._initialize_from_configuration(DEFAULT_CONFIG)
+
         self.saved_image_counter = 0
         self.timestamp = time.strftime("%Y-%m-%d-%H:%M:%S")
-    
-    def reset(self):
-        self.pos = large_random_pos()
 
-    def default_starting_configuration(self):
-        # just one occupied site at the origin
-        self.fillin(0, 0)
+    def _initialize_from_csv(self, csv_file):
+        the_configuration = set()
+        for site in read_from_csv(csv_file):
+            x, y = site
+            the_configuration.add((x, y))
+        self._initialize_from_configuration(the_configuration)
+
+    def _initialize_from_configuration(self, configuration):
+        for x, y in configuration:
+            self._fill(x, y)
     
-    def fillin(self, x, y):
-        self.stopat.update({(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)})
-        self.occ.add((x, y))
+    def _fill(self, x, y):
+        self.stop_at.update({(x, y+1), (x+1, y), (x, y-1), (x-1, y)})
+        self.occupy.add((x, y))
         self.radius = max(self.radius, np.sqrt(x**2 + y**2) + 1)
-        
-    def walk(self):
-        self.pos += 2 * np.random.randint(0, 2, 2) - 1
-        if tuple(self.pos) in self.stopat:
-            self.fillin(self.pos[0], self.pos[1])
-            self.reset()
-    
-    def log(self, txt):
-        if False:
-            if getattr(self, "logfile", None) is None:
-                self.logfile = open("log", "w")
-            self.logfile.write(txt)
-            self.logfile.write("\n")
-            self.logfile.flush()
-    
+
     def step(self):
-        x, y = self.pos
-        r = np.sqrt(x**2 + y**2)
-        if r > PARTICLES_RESET_OUTSIDE: # just reset
-            self.log("reset from %d %d" % (x, y))
-            self.pos = large_random_pos()
-            pass
-        elif r > self.radius + LONG_JUMP_MIN_DISTANCE: # long jump
-            self.log("long jump %d %d" % (x, y))
-            self.pos += self.regj.jump(int(r - self.radius - 0.5))
-            pass
-        else:
-            self.log("walk from %d %d" % (x, y))
-            self.walk()
-        return self.pos
-
+        x, y = self.pos.step(self.radius)
+        if (x,y) in self.stop_at:
+            self._fill(x, y)
+            self.pos.reset()
+        pass
+        
     def currently_occupied_sites(self):
-        """Return the list of currently occupied sites.
-
-        The result is rotated into the square lattice
-        by the map x, y -> (x + y) >> 1, (x - y) >> 1."""
-        occ = np.array(list(self.occ))
-        x, y = occ[:, 0], occ[:, 1]
-        return DIAGONAL_TO_SQUARE_LATTICE(x, y)
+        occ = np.array(list(self.occupy))
+        return occ[:, 0], occ[:, 1]
 
     def _save_fig(self, filename, plotsize = 7, scatterdotsize = 2):
         x, y = self.currently_occupied_sites()
 
         fig, ax = p.subplots(figsize=(plotsize, plotsize))
-        r = self.radius / np.sqrt(2) * 1.1
+        r = self.radius
         ax.set_xlim(-r, r)
         ax.set_ylim(-r, r)
 
         p.scatter(x, y, scatterdotsize)
-
-        """
-        def addline(x1, y1, x2, y2):
-            fig.lines.extend([ lines.Line2D([x1, x2], [y1, y2], transform=ax.transData, figure=fig) ])
-
-        for x, y in self.occ:
-            X, Y = DIAGONAL_TO_SQUARE_LATTICE(x, y)
-            if (x+1, y+1) in self.occ:
-                addline(X, Y, X+1, Y)
-                print("line", X, Y, X+1, Y)
-                pass
-            if (x+1, y-1) in self.occ:
-                addline(X, Y, X, Y-1)
-                print("line", X, Y, X, Y-1)
-        """
-                
         p.savefig(filename)
         p.close(fig)
 
@@ -246,7 +118,6 @@ class dla_walk:
         except FileExistsError:
             pass
 
-    #def plot(self, plotsize = 7, scatterdotsize = 2):
     def plot(self, plotsize = None, scatterdotsize = 2, filename_identifier=""):
         self.make_output_directory()
 
@@ -269,7 +140,7 @@ class dla_walk:
             x = j - COLS//2
             for i in range(ROWS):
                 y = i - ROWS//2
-                occ[j, i] = (x+y, x-y) in self.occ
+                occ[j, i] = (x, y) in self.occupy
         offset = ROWS & 1
         end = (ROWS + 1) // 2
         put = []
@@ -288,12 +159,14 @@ class dla_walk:
         print("\n" + "\n".join(put), end=none)
 
     def sitecount(self):
-        return len(self.occ)
+        return len(self.occupy)
 
-#FORMATSTRING = "%9d    %9d particles    %.2f sec/particle%s"
+    def scale(self):
+        return self.pos.scale()
+
 FORMATSTRING = "%9d    %9d particles    %.2f sec/particle    %7d steps/particle    scale: %.0e%s"
 
-def walk(csv, fps, quiet, output_after_every, plot_size, justplot):
+def runs(csv, fps, quiet, output_after_every, plot_size, justplot):
     dwal = dla_walk(occupied_set_csv = csv)
     try:
         if not justplot:
@@ -313,7 +186,7 @@ def walk(csv, fps, quiet, output_after_every, plot_size, justplot):
                 if not quiet:
                     sitecount = dwal.sitecount() - starting or 1
                     elapsed = time.time() - t
-                    scale = np.sqrt(dwal.regj.scale)
+                    scale = np.sqrt(dwal.scale())
                     extra = FORMATSTRING % (i, sitecount, elapsed / sitecount, steps / sitecount, scale, fn)
                     #extra = FORMATSTRING % (i, dwal.sitecount(), (time.time() - t) / max(1, (dwal.sitecount() - starting)), fn)
                     dwal.ascii(extra)
@@ -346,7 +219,7 @@ if __name__ == "__main__":
 
     fn = arg["continue"] or arg["plot"]
 
-    walk(
+    runs(
         csv = fn,
         fps = arg['fps'],
         quiet = arg['quiet'],
