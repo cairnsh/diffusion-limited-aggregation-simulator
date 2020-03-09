@@ -34,7 +34,7 @@ same bound for the probability of leaving the circle.
 So, we want to have T <= 0.5 * radius**2 / np.log(16/p).
 """
 
-def _diagonal_walk_safe_length(radius, p):
+def diagonal_walk_safe_length(radius, p):
     return 0.5 * radius**2 / np.log(16 / p)
 
 def DIAGONAL_TO_SQUARE_LATTICE(x, y):
@@ -55,14 +55,14 @@ class jump_regulator:
         self.probabilities = util_sequence.slowly_increasing_sequence(add_up_to = p)
 
     def get_allowed_length(self, radius):
-        length = _diagonal_walk_safe_length(radius, next(self.probabilities))
+        length = diagonal_walk_safe_length(radius, next(self.probabilities))
         if length < 1:
             return 1
         else:
             return int(np.floor(length))
 
     def jump(self, radius):
-        length = self.get_allowed_length()
+        length = self.get_allowed_length(radius)
         try:
             return walkfor(length)
         except OverflowError:
@@ -79,35 +79,39 @@ def large_random_position():
 
         x, y = int(x), int(y)
 
-        if (x + y) & 1:
-            continue
+        #if (x + y) & 1:
+        #    continue
 
-        return np.array([x, y])
-
+        return x, y
 
 def NEAR(x, y):
     return {(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)}
+
+STEPS = [[0, 1], [1, 0], [0, -1], [-1, 0]]
+STEPS = np.array(STEPS)
 
 class walk_handler:
     def __init__(self):
         self.jump = jump_regulator()
         self.reset()
 
+    def moveto(self, x, y):
+        self.pos = np.array([x, y])
+
     def reset(self):
-        self.pos = large_random_position()
+        self.moveto(*large_random_position())
 
     def step_slowly(self):
-        self.pos += 2 * np.random.randint(0, 2, 2) - 1
+        self.pos += STEPS[np.random.randint(4), :]
 
     def step_quickly(self, radius):
         self.pos += self.jump.jump(radius)
 
-    #def step(self, radius_to_walk_slowly):
-    def step(self, radius_to_walk_slowly, margin):
+    def step(self, radius_to_walk_slowly):
         r = np.sqrt(self.pos[0]**2 + self.pos[1]**2)
         if r > PARTICLES_RESET_OUTSIDE:
             self.reset()
-        elif r > radius_to_walk_slowly + margin:
+        elif r > radius_to_walk_slowly + LONG_JUMP_MIN_DISTANCE:
             self.step_quickly(r - radius_to_walk_slowly - 0.5)
         else:
             self.step_slowly()

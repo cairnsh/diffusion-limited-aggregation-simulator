@@ -17,7 +17,7 @@ class TestCentredBinomialRv(unittest.TestCase):
 
     def test_safe_length(self):
         DISTANCE = 200
-        length = walk._diagonal_walk_safe_length(DISTANCE, 0.01)
+        length = walk.diagonal_walk_safe_length(DISTANCE, 0.01)
         def f():
             shape = (2, int(np.floor(length)))
             wa = 2*np.random.randint(0, 2, shape) - 1
@@ -29,6 +29,7 @@ class TestCentredBinomialRv(unittest.TestCase):
         for i in range(TOTAL):
             if not f():
                 count += 1
+        print("fraction:", count / TOTAL)
         self.assertTrue(count < 0.01 * TOTAL)
 
     def test_rotate(self):
@@ -42,6 +43,7 @@ class TestCentredBinomialRv(unittest.TestCase):
             self.assertEqual((x, y), (X, Y))
 
     def test_jump_regulator(self):
+        regulator = walk.jump_regulator()
         pass
 
     def test_large_random_position(self):
@@ -51,4 +53,15 @@ class TestCentredBinomialRv(unittest.TestCase):
         pass
 
     def test_walk(self):
-        pass
+        handler = walk.walk_handler()
+        for i in range(10000):
+            handler.step(100)
+        for i in range(40):
+            handler.moveto(0, 0)
+            pos = handler.step(100)
+            self.assertTrue(abs(pos[0]) + abs(pos[1]) == 1)
+        for i in range(1000):
+            pos = handler.pos.copy()
+            handler.step_quickly(100)
+            pos -= handler.pos
+            self.assertTrue(np.linalg.norm(pos) < 100)
