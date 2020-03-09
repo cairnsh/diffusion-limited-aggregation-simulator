@@ -10,6 +10,8 @@ LONG_JUMP_MIN_DISTANCE = 20
 
 ALLOWED_PROBABILITY_OF_ERROR = 1e-6
 
+CYLINDERWIDTH = 1000
+
 def centred_binomial_rv(m, size):
     return 2 * np.random.binomial(m, 0.5, size) - m
 
@@ -76,23 +78,13 @@ class jump_regulator:
 
 def large_random_position():
     while True:
-        x, y = np.random.normal(0, PARTICLES_START_OUTSIDE, 2)
-
-        if x**2 + y**2 < PARTICLES_START_OUTSIDE**2:
-            continue
-
-        x, y = int(x), int(y)
-
-        #if (x + y) & 1:
-        #    continue
-
+        x, y = np.random.randint(CYLINDERWIDTH), int(PARTICLES_START_OUTSIDE)
         return x, y
-
-def NEAR(x, y):
-    return {(x+1, y+1), (x+1, y-1), (x-1, y+1), (x-1, y-1)}
 
 STEPS = [[0, 1], [1, 0], [0, -1], [-1, 0]]
 STEPS = np.array(STEPS)
+def NEAR(x, y):
+    return {((x + STEPS[j, 0]) % CYLINDERWIDTH, y + STEPS[j, 1]) for j in range(STEPS.shape[0])}
 
 class walk_handler:
     def __init__(self):
@@ -101,6 +93,10 @@ class walk_handler:
 
     def moveto(self, x, y):
         self.pos = np.array([x, y])
+        self._wrap()
+
+    def _wrap(self):
+        self.pos[0] %= CYLINDERWIDTH
 
     def reset(self, to=None):
         if to is None:
@@ -109,16 +105,18 @@ class walk_handler:
 
     def step_slowly(self):
         self.pos += STEPS[np.random.randint(4), :]
+        self._wrap()
 
     def step_quickly(self, radius):
         self.pos += self.jump.jump(radius)
+        self._wrap()
 
-    def step(self, radius_to_walk_slowly):
-        r = np.sqrt(self.pos[0]**2 + self.pos[1]**2)
-        if r > PARTICLES_RESET_OUTSIDE:
+    def step(self, height_to_walk_slowly):
+        y = abs(self.pos[1])
+        if y > PARTICLES_RESET_OUTSIDE:
             self.reset()
-        elif r > radius_to_walk_slowly + LONG_JUMP_MIN_DISTANCE:
-            self.step_quickly(r - radius_to_walk_slowly - 0.5)
+        elif y > height_to_walk_slowly + LONG_JUMP_MIN_DISTANCE:
+            self.step_quickly(y - height_to_walk_slowly - 0.5)
         else:
             self.step_slowly()
         return self.pos
